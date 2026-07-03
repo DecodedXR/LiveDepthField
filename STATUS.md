@@ -76,18 +76,29 @@ _Last updated: 2026-07-03 — Milestone 4 (live webcam input) landed. Milestone 
   `disabled` state (one estimator instance, one job at a time). Failure paths
   (permission denied / no camera / model-load / mid-loop inference error) tear
   down tracks, restore the idle UI, and surface in `#status` (console.warn,
-  not error). **Worker design question resolved: no worker in M4.** WebGPU (the
-  primary path) keeps the main thread free enough for orbit; WASM inference
-  blocks the main thread during each pass, so orbit stutters on WASM-only
-  machines — accepted as the degraded path (M5 already owns "warn it's
-  slower"); migrate inference to a Web Worker later ONLY if real-world WASM
-  jank warrants it. Smoke tests (fake camera via Chromium fake-media-stream
-  flags in `playwright.config.js`; controllable fake estimator via the new
-  `window.__app.__setEstimator` hook): M4-A — rAF keeps ticking during an
-  in-flight pass, no second call queues, the posted ramp is consumed with the
-  M3 sign contract, the loop continues unprompted, stop releases the camera
-  track and drops a stale post-stop result; M4-B — permission denial surfaces
-  in `#status` and the UI recovers. Debug hook grew `__setEstimator`,
+  not error). **The loop yields one rAF tick between passes** — found
+  empirically with the real model: the estimator's promise chain settles
+  entirely in microtasks on the WASM path, so a yield-less loop spins
+  post→capture→infer with rAF never firing — the posted depth was overwritten
+  forever (35+ completed passes, zero consumed) and orbit froze. The rAF yield
+  guarantees each posted frame is consumed and paces inference at ≤1 pass per
+  rendered frame (M4-C regression test: an instantly-resolving estimator must
+  not starve the render loop). **Worker design question resolved: no worker in
+  M4.** WebGPU (the primary path) runs compute off the main thread; on WASM
+  the main thread still blocks DURING each pass (measured ~4–11s/pass in the
+  headless probe), rendering one frame between passes — a live slideshow, not
+  30fps orbit. Accepted as the degraded fallback (M5 owns "warn it's slower");
+  if WASM-machine UX matters, migrating inference to a Web Worker is the
+  known fix and the natural M6 candidate. Smoke tests (fake camera via
+  Chromium fake-media-stream flags in `playwright.config.js`; controllable
+  fake estimator via the new `window.__app.__setEstimator` hook): M4-A — rAF
+  keeps ticking during an in-flight pass, no second call queues, the posted
+  ramp is consumed with the M3 sign contract, the loop continues unprompted,
+  stop releases the camera track and drops a stale post-stop result; M4-B —
+  permission denial surfaces in `#status` and the UI recovers; M4-C — the
+  starvation regression above. Real-model probe (fake camera, WASM):
+  continuous live passes verified end-to-end, canvas input 512×384 →
+  input-sized depth back. Debug hook grew `__setEstimator`, `__getEstimator`,
   `webcamRunning()`, `__webcamVideo`. Proven non-tautological (RED with
   production files reverted, tests kept). Pre-change HEAD (rollback) `33ce681`.
 

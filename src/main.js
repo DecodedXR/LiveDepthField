@@ -322,6 +322,13 @@ async function webcamLoop(estimator) {
     const { depth } = await estimator(canvas);
     if (!webcamActive) break; // stopped mid-pass: the result is stale — drop it
     pendingFrame = { depth, image: canvas }; // overwrite = drop, never queue
+    // Yield ONE rendered frame before the next pass. The estimator's promise
+    // chain can settle entirely in microtasks (the WASM path does), and
+    // microtask continuations starve rendering — without this, the loop spins
+    // post→capture→infer with rAF never firing, so the posted depth is
+    // overwritten forever and orbit freezes. One rAF tick guarantees the
+    // posted frame is consumed and paces inference at ≤1 pass per frame.
+    await new Promise((res) => requestAnimationFrame(res));
   }
 }
 
@@ -439,6 +446,7 @@ window.__app = {
   // injection point (the model still can't run in CI), the live flag, and the
   // hidden <video> so a test can watch the camera track get released.
   __setEstimator: _setEstimatorForTests,
+  __getEstimator: getDepthEstimator,
   webcamRunning: () => webcamActive,
   __webcamVideo: webcamVideo,
 };

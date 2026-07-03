@@ -311,6 +311,71 @@ test('milestone 4: webcam drives a continuous depth loop — decoupled, drop-nev
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
+// Milestone 4 decoupling, starvation direction: a FAST estimator must not
+// starve rendering. The webcam loop's post→capture→next-pass sequence runs in
+// promise continuations (microtasks); if the estimator resolves without ever
+// yielding to a macrotask — which the real WASM path does — a loop with no
+// explicit yield spins entirely in microtasks, rAF never fires, and the posted
+// depth is overwritten forever without one frame being consumed (found
+// empirically with the real model: 35+ passes completed, zero consumed). The
+// loop must yield to the renderer between passes.
+test('milestone 4: an instantly-resolving estimator must not starve the render loop', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+
+  // Fake estimator that resolves IMMEDIATELY (pure microtask — the starvation
+  // scenario), returning a constant near-plane so consumption is observable.
+  await page.evaluate(() => {
+    const W = 8;
+    const H = 8;
+    const data = new Uint8Array(W * H).fill(255); // all-bright: z → +0.5
+    window.__app.__setEstimator(() =>
+      Promise.resolve({ depth: { data, width: W, height: H } }),
+    );
+  });
+  await page.click('#webcam-toggle');
+
+  // The render loop must consume a posted frame: every Z lands at +0.5. If the
+  // loop starves rendering, the page wedges and this times out (RED).
+  await page.waitForFunction(() => {
+    let cloud = null;
+    window.__app.scene.traverse((o) => {
+      if (o.isPoints) cloud = o;
+    });
+    const pos = cloud.geometry.attributes.position;
+    return pos.getZ(0) > 0.4 && pos.getZ(pos.count - 1) > 0.4;
+  });
+
+  // And rAF keeps advancing while the live loop churns. (With an instant
+  // estimator every frame also captures + consumes, so under software WebGL
+  // frames are slow — the bar is "repeatedly ticking", not a frame rate; the
+  // starved case never even reaches this assert.)
+  const frames = await page.evaluate(
+    () =>
+      new Promise((done) => {
+        let n = 0;
+        const t0 = performance.now();
+        (function tick() {
+          n++;
+          if (performance.now() - t0 < 1000) requestAnimationFrame(tick);
+          else done(n);
+        })();
+      }),
+  );
+  expect(frames, 'rAF must keep ticking during a fast live loop').toBeGreaterThan(3);
+
+  await page.click('#webcam-toggle');
+  await page.waitForFunction(() => window.__app.webcamRunning() === false);
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
 // Milestone 4 failure path: camera permission denied (or no camera) must
 // surface a visible error state in #status and leave the UI recoverable — not
 // an uncaught rejection, not a console.error, not a stuck-disabled button.
