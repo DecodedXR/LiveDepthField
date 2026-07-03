@@ -4,7 +4,7 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-03 — Milestone 1 landed (fake 128×128 point cloud), PR #2._
+_Last updated: 2026-07-03 — Milestone 2 landed (splat-style shader + sliders)._
 
 ---
 
@@ -24,30 +24,29 @@ _Last updated: 2026-07-03 — Milestone 1 landed (fake 128×128 point cloud), PR
   unchanged. Smoke test asserts `getPointCount() === 16384` with no page/console
   errors. Landed via **PR #2**; pre-change HEAD (rollback) `4b81157`.
 
+- **Milestone 2 — Splat-style point aesthetic.** `src/main.js` replaces the M1
+  `PointsMaterial` with a custom `THREE.ShaderMaterial`: a soft round
+  (circular Gaussian alpha falloff, square corners discarded) additively-blended
+  sprite per point, with perspective size-by-depth (`gl_PointSize` scaled by
+  `uScale / -mvPosition.z`, `uScale` = half the drawing-buffer height, refreshed
+  on resize). Tunable uniforms `pointSize` / `glow` / `falloff` are wired to
+  plain HTML range sliders (a top-left `#controls` panel — no dat.GUI dependency
+  added). Same 16,384-point geometry; render loop / `OrbitControls` / resize /
+  `getPointCount()` hook intact. Smoke test asserts the cloud material is a
+  `ShaderMaterial` with `AdditiveBlending` + the three uniforms and
+  `getPointCount() === 16384`, no page/console errors (a shader compile error
+  would surface as `console.error`). Proven non-tautological (RED on the M1
+  `PointsMaterial` state). Pre-change HEAD (rollback) `7345f44`.
+
 ---
 
 ## NEXT (the one actionable task)
 
-### Milestone 2 — Splat-style point aesthetic
-
-**Goal:** make the M1 cloud _look_ like Gaussian splats — soft glowing sprites,
-size-by-depth, additive blending. Still no depth model or upload (those are M3+);
-this milestone is pure Three.js shading over the existing 16,384-point cloud.
-
-**Scope:** Replace the default `PointsMaterial` with a custom `ShaderMaterial`:
-round soft sprites (circular alpha falloff), additive blending, point size scaled
-by depth (closer = bigger), subtle glow. Expose tunable uniforms (`pointSize`,
-`glow`, `falloff`) wired to minimal sliders / dat.GUI. Keep the same
-16,384-point geometry and the render loop / controls / resize / `getPointCount()`
-hook intact.
-
-**Definition of done:** `npm run build` succeeds; `getPointCount()` still
-`=== 16384`; the cloud renders as soft additive sprites; no console/page errors.
-Author a RED smoke assertion first (e.g. the material is a `ShaderMaterial` /
-uniforms exist) that fails on the M1 `PointsMaterial` state and passes only after
-the shader lands — prove it non-tautological by reverting.
-
-**Test command:** `npm test` (builds, then runs Playwright).
+**None actionable by autopilot.** Milestone 2 has landed. The next milestone is
+**Milestone 3**, which carries a mandatory **human checkpoint** (confirm the
+transformers.js depth output format — tensor shape + value range — before wiring
+Z mapping) and is therefore **off-limits to autopilot**. A human must clear that
+checkpoint before M3 can be picked up. See BLOCKED below.
 
 ---
 
@@ -63,7 +62,8 @@ off-limits to autopilot** until a human clears it.
   per-point color; clear async loading state.
   ⚠️ **HUMAN CHECKPOINT / OFF-LIMITS TO AUTOPILOT:** must first STOP and confirm
   transformers.js output format (tensor shape + value range) with a human before
-  wiring Z mapping — do **not** guess. Blocked on M2.
+  wiring Z mapping — do **not** guess. M2 dependency now satisfied; remains gated
+  on the human checkpoint.
 
 - **Milestone 4 — Live webcam input.** `getUserMedia` → offscreen canvas; depth
   inference loop **decoupled** from render (post latest depth map; render consumes
