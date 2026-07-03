@@ -4,7 +4,7 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-03 — bootstrap complete (scaffold + CI + smoke harness)._
+_Last updated: 2026-07-03 — Milestone 1 landed (fake 128×128 point cloud), PR #2._
 
 ---
 
@@ -16,54 +16,38 @@ _Last updated: 2026-07-03 — bootstrap complete (scaffold + CI + smoke harness)
   Actions CI (`build` + `smoke`). Baseline is green. The scaffold renders an
   empty scene on purpose — no point cloud yet.
 
+- **Milestone 1 — Fake point cloud.** `src/main.js` builds a 128×128 grid
+  (16,384 points) `THREE.BufferGeometry` on the XY plane — X/Y centered at the
+  origin (-1..1), a random Z per point (-0.5..0.5) — wrapped in a `THREE.Points`
+  with the default `THREE.PointsMaterial` (`size 0.03`) and added to the scene.
+  Render loop, `OrbitControls`, resize handler, and the `getPointCount()` hook
+  unchanged. Smoke test asserts `getPointCount() === 16384` with no page/console
+  errors. Landed via **PR #2**; pre-change HEAD (rollback) `4b81157`.
+
 ---
 
 ## NEXT (the one actionable task)
 
-### Milestone 1 — Scaffold + render a fake point cloud
+### Milestone 2 — Splat-style point aesthetic
 
-**Goal:** prove the render pipeline and camera controls with real geometry. Upload
-a photo / depth model come later; this milestone is pure Three.js.
+**Goal:** make the M1 cloud _look_ like Gaussian splats — soft glowing sprites,
+size-by-depth, additive blending. Still no depth model or upload (those are M3+);
+this milestone is pure Three.js shading over the existing 16,384-point cloud.
 
-**Scope (do exactly this, nothing more):**
+**Scope:** Replace the default `PointsMaterial` with a custom `ShaderMaterial`:
+round soft sprites (circular alpha falloff), additive blending, point size scaled
+by depth (closer = bigger), subtle glow. Expose tunable uniforms (`pointSize`,
+`glow`, `falloff`) wired to minimal sliders / dat.GUI. Keep the same
+16,384-point geometry and the render loop / controls / resize / `getPointCount()`
+hook intact.
 
-- In `src/main.js`, at the marked `MILESTONE 1 GOES HERE` block, build a
-  **128 × 128 grid = 16,384 points** on the XY plane.
-  - Lay the grid out centered around the origin (roughly -1..1 in X and Y) so it
-    sits in front of the camera at `z = 3`.
-  - Give **each point a random Z** (e.g. in a small range like -0.5..0.5) so the
-    cloud has visible depth to orbit around.
-  - Use a `THREE.BufferGeometry` with a `position` attribute and wrap it in a
-    `THREE.Points` with the default `THREE.PointsMaterial` (a small `size`, e.g.
-    0.02–0.05). **The custom splat shader is Milestone 2 — do not do it here.**
-  - Add the `THREE.Points` to `scene`. Do not otherwise change the render loop,
-    controls, or resize handler.
+**Definition of done:** `npm run build` succeeds; `getPointCount()` still
+`=== 16384`; the cloud renders as soft additive sprites; no console/page errors.
+Author a RED smoke assertion first (e.g. the material is a `ShaderMaterial` /
+uniforms exist) that fails on the M1 `PointsMaterial` state and passes only after
+the shader lands — prove it non-tautological by reverting.
 
-**Definition of done (all must hold):**
-
-1. `npm run build` succeeds.
-2. `window.__app.getPointCount() === 16384` at runtime.
-3. Orbit / zoom / pan work (they already do via OrbitControls — just don't break
-   them). This is the human's visual confirm after merge.
-4. No console/page errors on load.
-
-**RED test to write first** (add to `tests/smoke.spec.js`; it must fail on the
-current empty scaffold and pass only after the cloud is added — prove it's
-non-tautological by reverting the `main.js` change and seeing it go red):
-
-```js
-test('milestone 1: renders a 128x128 (16,384-point) cloud', async ({ page }) => {
-  const errors = [];
-  page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto('/');
-  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
-  expect(await page.evaluate(() => window.__app.getPointCount())).toBe(16384);
-  expect(errors).toEqual([]);
-});
-```
-
-**Test command:** `npm test` (builds, then runs Playwright). Runs locally with a
-real/software GL context.
+**Test command:** `npm test` (builds, then runs Playwright).
 
 ---
 
@@ -72,12 +56,6 @@ real/software GL context.
 These are here for context only. Each depends on the one before it and must not be
 picked up in the same run. **M3 onward also carries a human checkpoint and is
 off-limits to autopilot** until a human clears it.
-
-- **Milestone 2 — Splat-style point aesthetic.** Replace `PointsMaterial` with a
-  custom `ShaderMaterial`: round soft sprites (circular alpha falloff), additive
-  blending, point size scaled by depth (closer = bigger), subtle glow. Tunable
-  uniforms (`pointSize`, `glow`, `falloff`) wired to minimal sliders / dat.GUI.
-  _Blocked on M1._
 
 - **Milestone 3 — Photo input → depth → cloud.** File upload for one image; load
   Depth Anything V2 Small via transformers.js; run one depth pass; map depth →
