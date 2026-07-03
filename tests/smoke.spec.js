@@ -37,3 +37,49 @@ test('milestone 1: renders a 128x128 (16,384-point) cloud', async ({ page }) => 
   expect(await page.evaluate(() => window.__app.getPointCount())).toBe(16384);
   expect(errors).toEqual([]);
 });
+
+// Milestone 2: the cloud must look like Gaussian splats — a custom ShaderMaterial
+// with additive blending and tunable pointSize/glow/falloff uniforms, over the
+// unchanged 16,384-point geometry. This asserts the material *identity*, not
+// pixels; it fails on the M1 default PointsMaterial state and passes only once
+// the splat shader lands (proven non-tautological by running before the fix).
+test('milestone 2: cloud uses an additive splat ShaderMaterial with tunable uniforms', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+
+  const mat = await page.evaluate(() => {
+    const THREE = window.__app.THREE;
+    let m = null;
+    window.__app.scene.traverse((o) => {
+      if (o.isPoints) m = o.material;
+    });
+    if (!m) return null;
+    return {
+      isShaderMaterial: m.isShaderMaterial === true,
+      additive: m.blending === THREE.AdditiveBlending,
+      transparent: m.transparent === true,
+      hasPointSize: !!(m.uniforms && m.uniforms.pointSize),
+      hasGlow: !!(m.uniforms && m.uniforms.glow),
+      hasFalloff: !!(m.uniforms && m.uniforms.falloff),
+    };
+  });
+
+  expect(mat, 'no THREE.Points found in the scene').not.toBeNull();
+  expect(mat.isShaderMaterial, 'cloud material must be a ShaderMaterial').toBe(true);
+  expect(mat.additive, 'cloud must use AdditiveBlending').toBe(true);
+  expect(mat.transparent, 'cloud material must be transparent').toBe(true);
+  expect(mat.hasPointSize, 'pointSize uniform must exist').toBe(true);
+  expect(mat.hasGlow, 'glow uniform must exist').toBe(true);
+  expect(mat.hasFalloff, 'falloff uniform must exist').toBe(true);
+
+  // Geometry is untouched by the aesthetic change.
+  expect(await page.evaluate(() => window.__app.getPointCount())).toBe(16384);
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
