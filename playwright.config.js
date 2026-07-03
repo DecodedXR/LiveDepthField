@@ -8,6 +8,10 @@ const webglArgs = [
   '--use-angle=swiftshader',
   '--enable-unsafe-swiftshader',
   '--ignore-gpu-blocklist',
+  // Milestone 4: grant a synthetic camera so getUserMedia works headlessly —
+  // the fake device produces a rolling test-pattern video, no hardware needed.
+  '--use-fake-ui-for-media-stream',
+  '--use-fake-device-for-media-stream',
 ];
 
 export default defineConfig({

@@ -9,6 +9,12 @@
 //   const { predicted_depth, depth } = await estimator(imageBlobOrUrl);
 //   depth: RawImage — Uint8, 1 channel, input W×H, 0–255 min–max normalized,
 //   RELATIVE depth where BRIGHTER = NEARER.
+//
+// Confirmed input contract (read from the installed 4.2.0 source, 2026-07-03 —
+// pipelines/_base.js prepareImages → utils/image.js RawImage.read): the
+// estimator accepts RawImage | string | URL | Blob | HTMLCanvasElement |
+// OffscreenCanvas. A canvas goes through RawImage.fromCanvas (a synchronous
+// getImageData) — the M4 webcam path feeds capture canvases directly.
 // ---------------------------------------------------------------------------
 
 const MODEL = 'onnx-community/depth-anything-v2-small';
@@ -52,4 +58,11 @@ async function loadEstimator() {
   const { pipeline } = await import('@huggingface/transformers');
   const device = await pickDevice();
   return pipeline('depth-estimation', MODEL, { device });
+}
+
+// Test hook (M4): swap in a fake estimator so the smoke tests can drive the
+// photo/webcam paths without downloading the real model. Never called by app
+// code — only via window.__app.__setEstimator.
+export function _setEstimatorForTests(fake) {
+  estimatorPromise = Promise.resolve(fake);
 }

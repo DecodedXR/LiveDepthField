@@ -187,3 +187,155 @@ test('milestone 3: upload UI exists; a non-image file shows an error state witho
   await expect(page.locator('#photo-input')).toHaveValue('');
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
+
+// Milestone 4: live webcam → continuous depth loop, DECOUPLED from render.
+// The real model can't run in CI (same reason as M3), so the testable seam is
+// the loop machinery: a controllable fake estimator is injected via
+// window.__app.__setEstimator, and Chromium's fake media device (see
+// playwright.config.js) stands in for the camera. The contract under test is
+// STATUS.md's M4 goal verbatim: the inference loop posts the latest depth map,
+// render consumes the newest, frames drop and never queue, and the render loop
+// never blocks on an in-flight inference.
+test('milestone 4: webcam drives a continuous depth loop — decoupled, drop-never-queue', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+
+  await expect(page.locator('#webcam-toggle')).toBeVisible();
+
+  // Install a controllable fake estimator BEFORE starting the webcam: each
+  // call hands us a resolver so the test decides when "inference" completes.
+  await page.evaluate(() => {
+    const s = (window.__t = { calls: 0, resolvers: [], inputsWereCanvas: true });
+    window.__app.__setEstimator((input) => {
+      s.calls++;
+      if (!(input instanceof HTMLCanvasElement)) s.inputsWereCanvas = false;
+      return new Promise((res) => s.resolvers.push(res));
+    });
+  });
+
+  await page.click('#webcam-toggle');
+
+  // The loop starts and calls the estimator with a captured canvas frame.
+  await page.waitForFunction(() => window.__t.calls === 1);
+
+  // DECOUPLING: while that inference is pending, the render loop keeps
+  // ticking (rAF advances)…
+  const frames = await page.evaluate(
+    () =>
+      new Promise((done) => {
+        let n = 0;
+        const t0 = performance.now();
+        (function tick() {
+          n++;
+          if (performance.now() - t0 < 400) requestAnimationFrame(tick);
+          else done(n);
+        })();
+      }),
+  );
+  expect(frames, 'rAF must keep ticking while inference is in flight').toBeGreaterThan(5);
+  // …and NO second inference queued up behind the pending one (never queue).
+  expect(await page.evaluate(() => window.__t.calls)).toBe(1);
+  expect(await page.evaluate(() => window.__t.inputsWereCanvas)).toBe(true);
+
+  // Resolve pass 1 with a horizontal ramp (0 left → 255 right). The posted
+  // map must be consumed by the render loop: bright = near = +Z (M3 contract).
+  await page.evaluate(() => {
+    const W = 8;
+    const H = 8;
+    const data = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) data[y * W + x] = Math.round((x / (W - 1)) * 255);
+    }
+    window.__t.resolvers.shift()({ depth: { data, width: W, height: H } });
+  });
+  await page.waitForFunction(() => {
+    let cloud = null;
+    window.__app.scene.traverse((o) => {
+      if (o.isPoints) cloud = o;
+    });
+    const pos = cloud.geometry.attributes.position;
+    const GRID = 128;
+    const mid = Math.floor(GRID / 2) * GRID;
+    return pos.getZ(mid + GRID - 1) > 0.4 && pos.getZ(mid) < -0.4;
+  });
+
+  // CONTINUOUS: a second pass starts on its own (no user action).
+  await page.waitForFunction(() => window.__t.calls >= 2);
+
+  // STOP: the loop ends, the camera track is released, and the photo input
+  // becomes usable again.
+  await page.evaluate(() => {
+    window.__t.track = window.__app.__webcamVideo.srcObject.getVideoTracks()[0];
+  });
+  await page.click('#webcam-toggle');
+  await page.waitForFunction(() => window.__app.webcamRunning() === false);
+  expect(await page.evaluate(() => window.__t.track.readyState)).toBe('ended');
+  await expect(page.locator('#photo-input')).toBeEnabled();
+
+  // A result that lands AFTER stop is stale and must be dropped, not applied:
+  // resolve the still-pending pass with an INVERTED ramp and confirm the cloud
+  // keeps the pass-1 orientation and no new inference starts.
+  const callsAtStop = await page.evaluate(() => window.__t.calls);
+  await page.evaluate(() => {
+    const W = 8;
+    const H = 8;
+    const data = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) data[y * W + x] = 255 - Math.round((x / (W - 1)) * 255);
+    }
+    for (const res of window.__t.resolvers.splice(0)) {
+      res({ depth: { data, width: W, height: H } });
+    }
+  });
+  await page.waitForTimeout(300);
+  const after = await page.evaluate(() => {
+    let cloud = null;
+    window.__app.scene.traverse((o) => {
+      if (o.isPoints) cloud = o;
+    });
+    const pos = cloud.geometry.attributes.position;
+    const GRID = 128;
+    const mid = Math.floor(GRID / 2) * GRID;
+    return { calls: window.__t.calls, zRight: pos.getZ(mid + GRID - 1) };
+  });
+  expect(after.calls, 'no new inference may start after stop').toBe(callsAtStop);
+  expect(after.zRight, 'a post-stop stale result must be dropped').toBeGreaterThan(0.4);
+
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
+// Milestone 4 failure path: camera permission denied (or no camera) must
+// surface a visible error state in #status and leave the UI recoverable — not
+// an uncaught rejection, not a console.error, not a stuck-disabled button.
+test('milestone 4: camera-permission failure shows an error state and recovers', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = () =>
+      Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+
+  await page.click('#webcam-toggle');
+
+  await expect(page.locator('#status')).toContainText(/denied|camera|webcam|failed/i);
+  expect(await page.evaluate(() => window.__app.webcamRunning())).toBe(false);
+  // Button and photo input both recover for another attempt.
+  await expect(page.locator('#webcam-toggle')).toBeEnabled();
+  await expect(page.locator('#webcam-toggle')).toContainText(/start/i);
+  await expect(page.locator('#photo-input')).toBeEnabled();
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
