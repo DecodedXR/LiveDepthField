@@ -267,6 +267,10 @@ photoInput.addEventListener('change', async () => {
     statusEl.textContent = `Depth failed: ${err && err.message ? err.message : err}`;
   } finally {
     photoInput.disabled = false;
+    // Clear the selection so re-picking the SAME file fires `change` again —
+    // otherwise a failed pass (e.g. network blip during the model download)
+    // couldn't be retried without choosing a different file first.
+    photoInput.value = '';
   }
 });
 

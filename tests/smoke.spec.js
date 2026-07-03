@@ -181,7 +181,9 @@ test('milestone 3: upload UI exists; a non-image file shows an error state witho
   });
 
   await expect(page.locator('#status')).toContainText(/couldn|failed|error/i);
-  // The input must recover so the user can try another file.
+  // The input must recover so the user can try another file — enabled AND
+  // cleared, so re-picking the SAME file fires `change` again.
   await expect(page.locator('#photo-input')).toBeEnabled();
+  await expect(page.locator('#photo-input')).toHaveValue('');
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
