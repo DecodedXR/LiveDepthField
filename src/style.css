@@ -40,3 +40,17 @@ canvas {
 #controls input[type='range'] {
   width: 130px;
 }
+
+/* Milestone 3: photo upload + async depth status line. */
+#controls input[type='file'] {
+  margin-top: 6px;
+  max-width: 200px;
+  font-size: 11px;
+  color: #cdd3df;
+}
+
+#status {
+  margin-top: 6px;
+  max-width: 210px;
+  color: #9fb4d8;
+}

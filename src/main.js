@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { getDepthEstimator } from './depth.js';
 
 // ---------------------------------------------------------------------------
 // Live Depth Field — render/camera scaffold.
@@ -51,6 +52,18 @@ for (let iy = 0; iy < GRID; iy++) {
 const cloudGeometry = new THREE.BufferGeometry();
 cloudGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
+// Milestone 3: per-point color, sampled from the uploaded photo. Initialized to
+// the M2 blue-white glow tint so the pre-upload cloud renders exactly as M2 did.
+// (Named `aColor`, not `color` — Three injects its own `color` attribute
+// declaration when vertexColors is on, and we manage this one ourselves.)
+const colors = new Float32Array(GRID * GRID * 3);
+for (let i = 0; i < colors.length; i += 3) {
+  colors[i] = 0.55;
+  colors[i + 1] = 0.78;
+  colors[i + 2] = 1.0;
+}
+cloudGeometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+
 // ===========================================================================
 // MILESTONE 2: style the M1 cloud as Gaussian-splat-like sprites. A custom
 // ShaderMaterial draws each point as a soft, round, additively-blended glow
@@ -80,8 +93,11 @@ const cloudMaterial = new THREE.ShaderMaterial({
   vertexShader: /* glsl */ `
     uniform float pointSize;
     uniform float uScale;
+    attribute vec3 aColor;
+    varying vec3 vColor;
 
     void main() {
+      vColor = aColor;
       vec4 mvPosition = modelViewMatrix * vec4( position, 1.0 );
       gl_Position = projectionMatrix * mvPosition;
       // Closer points (smaller -z) render larger, like splats. Clamp to keep a
@@ -92,6 +108,7 @@ const cloudMaterial = new THREE.ShaderMaterial({
   fragmentShader: /* glsl */ `
     uniform float glow;
     uniform float falloff;
+    varying vec3 vColor;
 
     void main() {
       // gl_PointCoord is 0..1 across the sprite; measure squared distance from
@@ -109,8 +126,9 @@ const cloudMaterial = new THREE.ShaderMaterial({
       // 1.0 so the falloff uniform sets how quickly the glow fades to the rim.
       float a = exp( -falloff * ( r2 * 4.0 ) );
 
-      vec3 color = vec3( 0.55, 0.78, 1.0 ); // soft blue-white glow
-      gl_FragColor = vec4( color * glow, a );
+      // Per-point color (M3): the photo's pixel color, or the M2 blue-white
+      // tint before any upload — the initial aColor fill carries that default.
+      gl_FragColor = vec4( vColor * glow, a );
     }
   `,
   transparent: true,
@@ -148,6 +166,110 @@ addSlider(controlPanel, 'Glow', 0.0, 2.5, 0.01, cloudMaterial.uniforms.glow);
 addSlider(controlPanel, 'Falloff', 0.5, 6.0, 0.1, cloudMaterial.uniforms.falloff);
 document.body.appendChild(controlPanel);
 
+// ===========================================================================
+// MILESTONE 3: photo upload → one depth pass → depth-displaced, image-colored
+// cloud through the M2 splat shader. The depth model runs once per upload;
+// nothing here touches the rAF render loop — the handler is plain async event
+// code, and the input is disabled while a pass is in flight (one job at a
+// time, never a queue).
+// ===========================================================================
+
+// Z displacement span for the normalized 0–255 depth: ±0.5 world units, the
+// same range the M1 random cloud used, so camera/orbit framing still fits.
+const DEPTH_SCALE = 1.0;
+
+// Map a depth map + photo onto the fixed GRID×GRID cloud.
+//
+// depth: the transformers.js `depth` RawImage contract — { data, width,
+// height }, Uint8, 1 channel, 0–255 min–max normalized, BRIGHTER = NEARER
+// (confirmed in STATUS.md). Sampled nearest-neighbor down to the grid: the
+// point budget stays fixed at 16,384 regardless of photo size (30fps orbit
+// constraint). Bright → +Z, toward the camera at z = 3.
+//
+// image: any CanvasImageSource; resampled to GRID×GRID for per-point color.
+// Grid +Y is up but image row 0 is the top, so both depth and color sampling
+// flip Y identically — keeping them aligned and the photo right-side up.
+function applyDepthToCloud(depth, image) {
+  const sample = document.createElement('canvas');
+  sample.width = GRID;
+  sample.height = GRID;
+  const ctx = sample.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(image, 0, 0, GRID, GRID);
+  const rgba = ctx.getImageData(0, 0, GRID, GRID).data;
+
+  const pos = cloudGeometry.attributes.position;
+  const col = cloudGeometry.attributes.aColor;
+  const { data, width, height } = depth;
+  for (let iy = 0; iy < GRID; iy++) {
+    const rowFlip = GRID - 1 - iy; // grid row iy=GRID-1 is y=+1 → image row 0
+    const py = Math.round((rowFlip / (GRID - 1)) * (height - 1));
+    for (let ix = 0; ix < GRID; ix++) {
+      const px = Math.round((ix / (GRID - 1)) * (width - 1));
+      const i = iy * GRID + ix;
+      pos.setZ(i, (data[py * width + px] / 255 - 0.5) * DEPTH_SCALE);
+      const c = (rowFlip * GRID + ix) * 4;
+      col.setXYZ(i, rgba[c] / 255, rgba[c + 1] / 255, rgba[c + 2] / 255);
+    }
+  }
+  pos.needsUpdate = true;
+  col.needsUpdate = true;
+
+  // Preserve the photo's aspect ratio by scaling the (square) cloud object —
+  // the geometry itself stays a static -1..1 grid.
+  const aspect = image.width && image.height ? image.width / image.height : 1;
+  if (aspect >= 1) cloud.scale.set(1, 1 / aspect, 1);
+  else cloud.scale.set(aspect, 1, 1);
+}
+
+const uploadRow = document.createElement('div');
+uploadRow.className = 'ctrl-row';
+const photoInput = document.createElement('input');
+photoInput.type = 'file';
+photoInput.id = 'photo-input';
+photoInput.accept = 'image/*';
+uploadRow.appendChild(photoInput);
+controlPanel.appendChild(uploadRow);
+
+const statusEl = document.createElement('div');
+statusEl.id = 'status';
+statusEl.textContent = 'Load a photo to see its depth field.';
+controlPanel.appendChild(statusEl);
+
+photoInput.addEventListener('change', async () => {
+  const file = photoInput.files && photoInput.files[0];
+  if (!file) return;
+  photoInput.disabled = true;
+  try {
+    statusEl.textContent = 'Reading image…';
+    let image;
+    try {
+      image = await createImageBitmap(file);
+    } catch {
+      statusEl.textContent = "Couldn't read that image — try a different file.";
+      return;
+    }
+    statusEl.textContent = 'Loading depth model… (downloads once, then cached)';
+    const estimator = await getDepthEstimator();
+    statusEl.textContent = 'Estimating depth…';
+    const url = URL.createObjectURL(file);
+    try {
+      const { depth } = await estimator(url);
+      applyDepthToCloud(depth, image);
+    } finally {
+      URL.revokeObjectURL(url);
+      image.close();
+    }
+    statusEl.textContent = `Done — ${GRID}×${GRID} points from ${file.name}`;
+  } catch (err) {
+    // Model-load / inference failures land here. warn, not error: an expected,
+    // user-visible failure state shouldn't trip the console.error smoke gate.
+    console.warn('[depth] failed:', err);
+    statusEl.textContent = `Depth failed: ${err && err.message ? err.message : err}`;
+  } finally {
+    photoInput.disabled = false;
+  }
+});
+
 function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -176,4 +298,14 @@ function getPointCount() {
   });
   return n;
 }
-window.__app = { THREE, scene, camera, renderer, controls, getPointCount };
+window.__app = {
+  THREE,
+  scene,
+  camera,
+  renderer,
+  controls,
+  getPointCount,
+  // M3: exposed so tests can drive the depth→cloud mapping with synthetic
+  // data — the real model (a ~100MB download) can't run in CI.
+  applyDepth: applyDepthToCloud,
+};
