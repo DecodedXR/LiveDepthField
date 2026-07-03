@@ -4,8 +4,9 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-03 — M3 human checkpoint **CLEARED** (transformers.js
-depth output format confirmed). Milestone 3 is now the actionable NEXT._
+_Last updated: 2026-07-03 — M3 fully unblocked: human checkpoint **CLEARED**
+(depth output format confirmed) **and** `@huggingface/transformers@4.2.0` added.
+Milestone 3 is the actionable NEXT._
 
 ---
 
@@ -88,12 +89,14 @@ cloud renders through the M2 splat shader; async model-load state is visible;
 RED test first (e.g. the cloud's geometry/point layout updates to image-derived
 values after a depth pass) proven non-tautological by reverting.
 
-**Dependency note:** M3 is the one milestone that **adds a runtime dependency**
-(`@huggingface/transformers` for the depth model — the bootstrap deliberately did
-not provision it). Editing dependencies is on autopilot's forbidden-ops list, so
-this addition is a **second gate**: a human should add/approve the dependency (or
-run M3 in a normal session), after which autopilot may implement the rest. This
-is the intended exception to the "don't edit dependencies" CI note below.
+**Dependency note (SATISFIED — 2026-07-03):** `@huggingface/transformers@4.2.0`
+was added to `package.json` + `package-lock.json` with human approval (the
+bootstrap had deliberately left it out). The confirmed output contract above was
+researched against this same v4 line (the `onnx-community/depth-anything-v2-small`
+model card and the v4 `DepthEstimationPipeline` source), so it holds. Both M3
+gates — the human checkpoint and the dependency add — are now **cleared**; M3 is
+fully actionable for autopilot. Autopilot must **not** edit dependencies further —
+that stays on its forbidden-ops list; the one intended addition is done.
 
 **Autopilot note:** checkpoint is cleared, but M3 is the highest-uncertainty
 milestone (model API, WebGPU/WASM, async decoupling). Keep the verify + review
@@ -131,6 +134,7 @@ it now lives under NEXT above.)
   Do not weaken/delete the smoke test to force green; if CI is red for a real
   reason, bail and report per the autopilot rules.
 - Do not edit dependencies or CI config as part of a milestone task — the
-  bootstrap already provisioned `three`, Vite, Playwright, and CI. **Exception:
-  Milestone 3** must add `@huggingface/transformers` (the depth model); that is
-  the one intended runtime-dependency addition. Do not touch CI config even then.
+  bootstrap already provisioned `three`, Vite, Playwright, and CI. The one
+  intended runtime-dependency addition, `@huggingface/transformers` (the depth
+  model), is **already added (v4.2.0)** for M3 — no further dependency edits. Do
+  not touch CI config.
