@@ -19,6 +19,11 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 10_000 },
   fullyParallel: true,
+  // Software WebGL makes every page CPU-rendered, and the M4 webcam tests
+  // churn continuous capture/consume loops — at high worker counts the
+  // Chromiums starve each other and unrelated tests miss their boot waits.
+  // Two workers is stable locally; CI (2-core runners) keeps its own default.
+  workers: process.env.CI ? undefined : 2,
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:4173',

@@ -199,6 +199,9 @@ test('milestone 3: upload UI exists; a non-image file shows an error state witho
 test('milestone 4: webcam drives a continuous depth loop — decoupled, drop-never-queue', async ({
   page,
 }) => {
+  // Webcam-loop tests churn continuous capture/consume work and may share the
+  // machine with the other churn test — give them headroom over the default.
+  test.setTimeout(60_000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
   page.on('console', (m) => {
@@ -226,20 +229,28 @@ test('milestone 4: webcam drives a continuous depth loop — decoupled, drop-nev
   await page.waitForFunction(() => window.__t.calls === 1);
 
   // DECOUPLING: while that inference is pending, the render loop keeps
-  // ticking (rAF advances)…
-  const frames = await page.evaluate(
+  // ticking. The property is LIVENESS (a starved loop yields zero frames,
+  // ever), not a frame rate — software-WebGL pacing under parallel workers is
+  // not the app's contract. Five observed frames before a generous deadline.
+  const tick1 = await page.evaluate(
     () =>
       new Promise((done) => {
         let n = 0;
-        const t0 = performance.now();
+        const deadline = setTimeout(() => done({ alive: false, n }), 10_000);
         (function tick() {
-          n++;
-          if (performance.now() - t0 < 400) requestAnimationFrame(tick);
-          else done(n);
+          if (++n >= 5) {
+            clearTimeout(deadline);
+            done({ alive: true, n });
+            return;
+          }
+          requestAnimationFrame(tick);
         })();
       }),
   );
-  expect(frames, 'rAF must keep ticking while inference is in flight').toBeGreaterThan(5);
+  expect(
+    tick1.alive,
+    `rAF must keep ticking while inference is in flight (${tick1.n} frames in 10s)`,
+  ).toBe(true);
   // …and NO second inference queued up behind the pending one (never queue).
   expect(await page.evaluate(() => window.__t.calls)).toBe(1);
   expect(await page.evaluate(() => window.__t.inputsWereCanvas)).toBe(true);
@@ -322,6 +333,8 @@ test('milestone 4: webcam drives a continuous depth loop — decoupled, drop-nev
 test('milestone 4: an instantly-resolving estimator must not starve the render loop', async ({
   page,
 }) => {
+  // See the sibling webcam test: churn tests get headroom over the default.
+  test.setTimeout(60_000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
   page.on('console', (m) => {
@@ -353,23 +366,29 @@ test('milestone 4: an instantly-resolving estimator must not starve the render l
     return pos.getZ(0) > 0.4 && pos.getZ(pos.count - 1) > 0.4;
   });
 
-  // And rAF keeps advancing while the live loop churns. (With an instant
-  // estimator every frame also captures + consumes, so under software WebGL
-  // frames are slow — the bar is "repeatedly ticking", not a frame rate; the
-  // starved case never even reaches this assert.)
-  const frames = await page.evaluate(
+  // And rAF keeps advancing while the live loop churns. The property is
+  // LIVENESS (a starved loop yields zero frames, ever), not a frame rate —
+  // with an instant estimator every frame also captures + consumes, so
+  // software-WebGL frames are slow. Five observed frames before a deadline.
+  const tick2 = await page.evaluate(
     () =>
       new Promise((done) => {
         let n = 0;
-        const t0 = performance.now();
+        const deadline = setTimeout(() => done({ alive: false, n }), 10_000);
         (function tick() {
-          n++;
-          if (performance.now() - t0 < 1000) requestAnimationFrame(tick);
-          else done(n);
+          if (++n >= 5) {
+            clearTimeout(deadline);
+            done({ alive: true, n });
+            return;
+          }
+          requestAnimationFrame(tick);
         })();
       }),
   );
-  expect(frames, 'rAF must keep ticking during a fast live loop').toBeGreaterThan(3);
+  expect(
+    tick2.alive,
+    `rAF must keep ticking during a fast live loop (${tick2.n} frames in 10s)`,
+  ).toBe(true);
 
   await page.click('#webcam-toggle');
   await page.waitForFunction(() => window.__app.webcamRunning() === false);
