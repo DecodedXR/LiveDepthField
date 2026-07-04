@@ -10,3 +10,4 @@ test-results/
 
 # Stray empty nested folder left locked by OneDrive during the repo flatten
 /3DViewer/
+.netlify/
