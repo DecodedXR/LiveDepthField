@@ -779,6 +779,67 @@ test('title: Live Depth Field name + Noah Federovitch credit shown at top center
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
+// Build credit (user-directed, not a milestone). A "Built with Claude Fable 5"
+// attribution must sit at the bottom-middle of the screen — the counterpart to
+// the top #app-title. Static presentational chrome inlined in the initial HTML,
+// so this asserts (a) it ships in the raw server bytes, (b) it's visible,
+// horizontally centered near the BOTTOM of the live page, and (c) the overlay
+// never intercepts pointer input (so it can't block orbiting the cloud beneath
+// it). Non-tautological: no #build-credit exists before this change.
+test('build credit: "Built with Claude Fable 5" shown at bottom center', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+
+  // (a) The credit ships in the exact bytes the server sends — static chrome,
+  // not JS-injected. Fetched raw so a scripted node can't satisfy it.
+  const html = await (await page.request.get('/')).text();
+  expect(html, 'initial HTML must contain a #build-credit overlay').toMatch(
+    /id=["']build-credit["']/,
+  );
+  expect(html, 'the credit must name the build tool').toContain(
+    'Built with Claude Fable 5',
+  );
+
+  // (b) Live: the credit is visible and its text is present once the page loads.
+  await page.goto('/');
+  const credit = page.locator('#build-credit');
+  await expect(credit).toBeVisible();
+  await expect(credit).toContainText(/Built with Claude Fable 5/i);
+
+  // Bottom-middle placement: horizontally centered, near the bottom edge.
+  const box = await credit.boundingBox();
+  const viewport = page.viewportSize();
+  const creditCenter = box.x + box.width / 2;
+  const viewportCenter = viewport.width / 2;
+  expect(
+    Math.abs(creditCenter - viewportCenter),
+    `credit must be horizontally centered (center ${creditCenter} vs ${viewportCenter})`,
+  ).toBeLessThan(40);
+  expect(
+    box.y + box.height,
+    'credit must sit near the bottom of the screen',
+  ).toBeGreaterThan(viewport.height - 80);
+
+  // (c) The overlay must not steal orbit input — the element under its center
+  // point must be the canvas, not the credit.
+  const underCenter = await page.evaluate(() => {
+    const el = document.getElementById('build-credit');
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit ? hit.tagName.toLowerCase() : null;
+  });
+  expect(underCenter, 'credit must not capture pointer events over the canvas').toBe(
+    'canvas',
+  );
+
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
 // Milestone 6: WASM inference moves into a Web Worker so the main thread stays
 // responsive during a pass. The worker itself can't run in CI (it loads the
 // real ~100MB model — the worker-path proof is a local real-model probe, like

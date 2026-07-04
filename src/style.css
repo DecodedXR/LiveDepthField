@@ -52,6 +52,23 @@ canvas {
   color: var(--accent-dim);
 }
 
+/* Build attribution, docked bottom-middle over the canvas — counterpart to
+   #app-title. Same pointer-events:none / below-boot-loader rules so it never
+   steals orbit drags and the loader still covers it during boot. */
+#build-credit {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+  font: 11px/1 var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--accent-dim);
+}
+
 /* Milestone 2: live splat-uniform sliders, docked top-left over the canvas. */
 #controls {
   position: fixed;

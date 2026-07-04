@@ -4,10 +4,10 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-04 — Milestone 6 (Web Worker WASM inference) done; three
+_Last updated: 2026-07-04 — Milestone 6 (Web Worker WASM inference) done; four
 user-directed polish items (boot loading bar, a black+green "coding" aesthetic,
-then a persistent title + author credit) landed on top; queue empty pending an
-M7 proposal._
+a persistent title + author credit, then a bottom "Built with Claude Fable 5"
+build credit) landed on top; queue empty pending an M7 proposal._
 
 ---
 
@@ -215,6 +215,18 @@ M7 proposal._
   non-tautological (RED on the prior HTML: no `#app-title`). Verified visually on
   a real build (centered green title + credit above the orbiting cloud, ~21fps).
   Pre-change HEAD (rollback) `d5546e8`.
+
+- **Polish — bottom "Built with Claude Fable 5" build credit (user-directed, not
+  a milestone).** A bottom-middle build-attribution line, the counterpart to the
+  top `#app-title`. Same treatment: an inline `#build-credit` div in `index.html`
+  styled in `src/style.css` (`position: fixed; bottom: 12px`, centered, dim
+  `--accent-dim` monospace), `pointer-events: none` + `z-index: 5` so it never
+  intercepts orbit drags and the boot loader still covers it during boot. **No
+  JS.** Smoke test asserts the string ships in the raw HTML AND the live credit
+  is visible, horizontally centered near the bottom, and doesn't capture pointer
+  events over the canvas. Proven non-tautological (RED on the prior HTML: no
+  `#build-credit`). Verified visually on a real build. Pre-change HEAD (rollback)
+  `94b4084`.
 
 **Carry-over facts from M3/M4 (do not re-derive):**
 
