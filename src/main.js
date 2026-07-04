@@ -54,14 +54,15 @@ const cloudGeometry = new THREE.BufferGeometry();
 cloudGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
 // Milestone 3: per-point color, sampled from the uploaded photo. Initialized to
-// the M2 blue-white glow tint so the pre-upload cloud renders exactly as M2 did.
-// (Named `aColor`, not `color` — Three injects its own `color` attribute
-// declaration when vertexColors is on, and we manage this one ourselves.)
+// a phosphor-green glow tint — the app's black+green "coding" accent — so the
+// pre-upload cloud reads as a terminal-green splat field. (Named `aColor`, not
+// `color` — Three injects its own `color` attribute declaration when
+// vertexColors is on, and we manage this one ourselves.)
 const colors = new Float32Array(GRID * GRID * 3);
 for (let i = 0; i < colors.length; i += 3) {
-  colors[i] = 0.55;
-  colors[i + 1] = 0.78;
-  colors[i + 2] = 1.0;
+  colors[i] = 0.15;
+  colors[i + 1] = 1.0;
+  colors[i + 2] = 0.45;
 }
 cloudGeometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
 

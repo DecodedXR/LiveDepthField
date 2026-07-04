@@ -1,3 +1,13 @@
+/* Black + green "coding" aesthetic. A phosphor-green HUD on a pure-black stage,
+   monospace throughout, so the whole tool reads like a terminal. --accent is the
+   bright phosphor green; --accent-dim the calmer readout green. */
+:root {
+  --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', ui-monospace, 'Cascadia Code',
+    Menlo, Consolas, monospace;
+  --accent: #00ff9c;
+  --accent-dim: #3fd68a;
+}
+
 html,
 body {
   margin: 0;
@@ -17,13 +27,14 @@ canvas {
   top: 12px;
   left: 12px;
   padding: 10px 12px;
-  background: rgba(20, 22, 28, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 12, 6, 0.62);
+  border: 1px solid rgba(0, 255, 156, 0.28);
   border-radius: 8px;
-  font: 12px/1.4 system-ui, sans-serif;
-  color: #cdd3df;
+  font: 12px/1.4 var(--mono);
+  color: var(--accent-dim);
   user-select: none;
   backdrop-filter: blur(4px);
+  box-shadow: 0 0 20px rgba(0, 255, 156, 0.12), inset 0 0 24px rgba(0, 255, 156, 0.04);
 }
 
 #controls .ctrl-row {
@@ -35,10 +46,35 @@ canvas {
 
 #controls .ctrl-row span {
   width: 52px;
+  color: var(--accent);
+  letter-spacing: 0.06em;
 }
 
 #controls input[type='range'] {
   width: 130px;
+  accent-color: var(--accent);
+}
+
+#controls button {
+  font: inherit;
+  color: var(--accent);
+  background: rgba(0, 255, 156, 0.08);
+  border: 1px solid rgba(0, 255, 156, 0.4);
+  border-radius: 5px;
+  padding: 4px 10px;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+#controls button:hover:not(:disabled) {
+  background: rgba(0, 255, 156, 0.18);
+  box-shadow: 0 0 10px rgba(0, 255, 156, 0.35);
+}
+
+#controls button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* Milestone 3: photo upload + async depth status line. */
@@ -46,23 +82,37 @@ canvas {
   margin-top: 6px;
   max-width: 200px;
   font-size: 11px;
-  color: #cdd3df;
+  font-family: var(--mono);
+  color: var(--accent-dim);
+}
+
+#controls input[type='file']::file-selector-button {
+  font: 11px var(--mono);
+  color: var(--accent);
+  background: rgba(0, 255, 156, 0.08);
+  border: 1px solid rgba(0, 255, 156, 0.4);
+  border-radius: 5px;
+  padding: 3px 8px;
+  margin-right: 8px;
+  cursor: pointer;
 }
 
 #status {
   margin-top: 6px;
   max-width: 210px;
-  color: #9fb4d8;
+  color: var(--accent-dim);
 }
 
 /* Milestone 5: FPS / inference readouts + the WASM slower-device warning. */
 #hud {
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
-  color: #9fb4d8;
+  border-top: 1px solid rgba(0, 255, 156, 0.2);
+  color: var(--accent-dim);
 }
 
+/* WASM slower-device warning: kept amber on purpose — a caution signal that
+   reads distinctly against the green so it never blends into the HUD. */
 #device-note {
   max-width: 210px;
   color: #e8c46a;

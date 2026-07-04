@@ -685,6 +685,38 @@ test('boot loader: shipped in the initial HTML before JS, dismissed once the app
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
+// Polish — black + green "coding" aesthetic (user-directed, not a milestone).
+// The one JS-observable part of the restyle is the pre-upload point-cloud tint:
+// before any photo/webcam upload, the cloud renders in the app's accent color.
+// A green coding aesthetic means that default tint reads GREEN — the green
+// channel dominates and is strong. (Post-upload the cloud is colored from the
+// image; this asserts only the default fill, so the M3 image-color path is
+// untouched.) Non-tautological: RED on the prior blue-white (0.55, 0.78, 1.0)
+// tint where blue dominates; green only once the tint is changed.
+test('aesthetic: pre-upload cloud tint reads green (coding aesthetic)', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+
+  const tint = await page.evaluate(() => {
+    let cloud = null;
+    window.__app.scene.traverse((o) => {
+      if (o.isPoints) cloud = o;
+    });
+    const col = cloud.geometry.attributes.aColor;
+    return { r: col.getX(0), g: col.getY(0), b: col.getZ(0) };
+  });
+  // Green channel dominates and is strong — a green cloud, not blue-white.
+  expect(tint.g, 'green channel must be strong').toBeGreaterThan(0.8);
+  expect(tint.g, 'green must dominate red').toBeGreaterThan(tint.r);
+  expect(tint.g, 'green must dominate blue').toBeGreaterThan(tint.b);
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
 // Milestone 6: WASM inference moves into a Web Worker so the main thread stays
 // responsive during a pass. The worker itself can't run in CI (it loads the
 // real ~100MB model — the worker-path proof is a local real-model probe, like

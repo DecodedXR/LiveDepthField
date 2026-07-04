@@ -4,9 +4,9 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-04 — Milestone 6 (Web Worker WASM inference) done; a
-user-directed polish item (boot loading bar) landed on top; queue empty pending
-an M7 proposal._
+_Last updated: 2026-07-04 — Milestone 6 (Web Worker WASM inference) done; two
+user-directed polish items (boot loading bar, then a black+green "coding"
+aesthetic) landed on top; queue empty pending an M7 proposal._
 
 ---
 
@@ -175,6 +175,25 @@ an M7 proposal._
   once the app boots — non-tautological only together (loader-in-HTML but no
   dismissal was verified RED on the second assertion). Verified visually on a
   real build (frozen-loader screenshot). Pre-change HEAD (rollback) `789d6ae`.
+
+- **Polish — black + green "coding" aesthetic (user-directed, not a milestone).**
+  Restyled the whole UI to a phosphor-green-on-black terminal look. `src/style.css`
+  gains `--accent` (`#00ff9c`) / `--accent-dim` / `--mono` (monospace stack)
+  custom properties driving the `#controls` panel, slider labels+thumbs
+  (`accent-color`), the webcam/`::file-selector-button` buttons, `#status`, and
+  the `#hud` — all green, monospace, with a soft green outer glow on the panel.
+  `index.html`'s inline boot-loader CSS goes green (title + track + fill + glow),
+  monospace. `src/main.js`'s pre-upload point-cloud tint flips from blue-white
+  `(0.55, 0.78, 1.0)` to phosphor green `(0.15, 1.0, 0.45)` — the one
+  JS-observable change; **post-upload color still samples the image** (M3 path
+  untouched). `#device-note` stays amber on purpose (a caution signal that must
+  read distinctly against the green). Geometry, material identity, uniforms, the
+  render loop, and the M4 decoupling machinery are byte-unchanged. Smoke test
+  asserts the pre-upload `aColor` reads green (G>0.8, G dominant) — proven
+  non-tautological (RED on the old blue tint: G=0.78 fails G>0.8, and B=1.0
+  dominates). Verified visually on a real build (green splat cloud + green HUD,
+  30.7fps). Deployed to the linked Netlify site (`live-depth-field`).
+  Pre-change HEAD (rollback) `d455809`.
 
 **Carry-over facts from M3/M4 (do not re-derive):**
 

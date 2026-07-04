@@ -31,24 +31,26 @@
         pointer-events: none;
       }
       #boot-loader .boot-title {
-        font: 600 13px/1 system-ui, sans-serif;
-        letter-spacing: 0.14em;
+        font: 600 13px/1 'JetBrains Mono', 'Fira Code', ui-monospace, Menlo,
+          Consolas, monospace;
+        letter-spacing: 0.18em;
         text-transform: uppercase;
-        color: #8fb7ee;
+        color: #00ff9c;
+        text-shadow: 0 0 12px rgba(0, 255, 156, 0.6);
       }
       #boot-loader .boot-track {
         width: 220px;
         height: 4px;
         border-radius: 4px;
-        background: rgba(255, 255, 255, 0.12);
+        background: rgba(0, 255, 156, 0.14);
         overflow: hidden;
       }
       #boot-loader .boot-fill {
         width: 0;
         height: 100%;
         border-radius: 4px;
-        background: linear-gradient(90deg, #5a8fd6, #8ec7ff);
-        box-shadow: 0 0 12px rgba(142, 199, 255, 0.7);
+        background: linear-gradient(90deg, #00b36b, #00ff9c);
+        box-shadow: 0 0 12px rgba(0, 255, 156, 0.75);
         animation: boot-advance 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         transition: width 0.3s ease;
       }
