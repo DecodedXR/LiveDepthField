@@ -1,7 +1,7 @@
 ---
 name: autopilot-fable
 description: Token-lean autopilot for Fable-class models on the 3DViewer / Live Depth Field repo — same contract as `autopilot` (pick ONE unblocked task from STATUS.md, test-first, independent adversarial verification, PR that auto-merges ONLY if CI is green, bail over guess) but single-agent depth instead of multi-agent breadth. No Workflow fan-outs, no verifier panels, no budget loops; at most 2 subagents per run (3 if implementation is delegated). Matches spend to intensity — Fable takes the most demanding eligible pick directly; a low-level pick still ships but its hands-on work is delegated to a cheaper worker model (sonnet/haiku) while Fable keeps every gate and the merge decision. Use when the user asks for an efficient/lean/cheap autonomous run — "autopilot fable", "lean autopilot", "autopilot but cheap", "efficient autopilot". Invoking it IS the standing authorization to open and auto-merge the PR. Never auto-sends email (draft only); never touches a milestone gated on an unconfirmed model-API / tensor-shape / WebGPU fact or an open human checkpoint; if asked for `ultra`, use the `autopilot` skill instead.
-version: 0.3.0
+version: 0.3.1
 ---
 
 # Autopilot (Fable) — Ship the Next Unblocked Task, Lean
@@ -21,6 +21,8 @@ out.
 
 **Token discipline (the point of this variant):**
 - **Never use the `Workflow` tool.** No panels, no pipelines, no budget machinery.
+  This includes indirectly: **do not invoke `/code-review`** — at high/max it expands
+  to a ~30-agent review workflow (~750k tokens observed). Review inline per §5.
 - **≤ 2 subagents per run** (≤ 3 when implementation is delegated per §3-D): at most
   one `Explore` during selection (only if STATUS.md doesn't localize the task), at
   most one lower-model worker, and exactly one adversarial verifier (§4).
@@ -161,13 +163,23 @@ path via Playwright + the `window.__app` hook, not freshly-authored stubs. After
 returns, **re-diff the tree** (`git diff --stat`) — read-only is not self-enforcing. A
 hole → fix and re-verify (targeted tests only); can't close it → bail per §8.
 
-## 5. Review — one local pass, scaled to the diff
+## 5. Review — one INLINE pass, scaled to the diff
 
-One `/code-review` over the diff, **local only — never the billed cloud `ultra`
-review**: **high** effort for a bounded/test-only/doc diff, **max** only when the diff
-touches the render/inference-decoupling core or a milestone boundary. Apply confirmed
-fixes, re-run targeted tests (rebuild first). A judgment-call finding blocks
-auto-merge — carry it to the PR.
+Review the diff **yourself, inline — do NOT invoke the `/code-review` skill or the
+`code-review` workflow**. In this harness `/code-review` at high/max expands to a
+multi-agent Workflow (~30 agents, ~750k tokens observed on the M4 run — it blew the
+session limit and most of its verifiers died on it), which violates this skill's
+no-Workflow rule. Never the billed cloud `ultra` review either.
+
+Inline means: read the full `git diff main...HEAD` once, hunting (a) correctness —
+races/interleavings, failure paths, contract drift vs STATUS/CLAUDE.md invariants;
+(b) test integrity — does each new test fail on the code it claims to catch;
+(c) leftovers — TEMP instrumentation, throwaway files, stale comments. Spend depth,
+not agents: one careful pass at full attention for a core/milestone diff, a lighter
+skim for a bounded/test-only/doc diff. Apply confirmed fixes, re-run targeted tests
+(rebuild first). A judgment-call finding blocks auto-merge — carry it to the PR.
+(The independent §4 verifier is the second pair of eyes; the review pass does not
+need its own subagents.)
 
 ## 6. Land via PR — auto-merge ONLY if CI is green
 
