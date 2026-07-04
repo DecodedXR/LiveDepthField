@@ -4,9 +4,10 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-04 — Milestone 6 (Web Worker WASM inference) done; two
-user-directed polish items (boot loading bar, then a black+green "coding"
-aesthetic) landed on top; queue empty pending an M7 proposal._
+_Last updated: 2026-07-04 — Milestone 6 (Web Worker WASM inference) done; three
+user-directed polish items (boot loading bar, a black+green "coding" aesthetic,
+then a persistent title + author credit) landed on top; queue empty pending an
+M7 proposal._
 
 ---
 
@@ -194,6 +195,26 @@ aesthetic) landed on top; queue empty pending an M7 proposal._
   dominates). Verified visually on a real build (green splat cloud + green HUD,
   30.7fps). Deployed to the linked Netlify site (`live-depth-field`).
   Pre-change HEAD (rollback) `d455809`.
+
+- **Polish — persistent title + author credit (user-directed, not a milestone).**
+  The "Live Depth Field" name previously lived only on the boot loader; it now
+  also sits **persistently at the top-middle of the running app**, with the
+  author credit **"by Noah Federovitch"** beneath it. Both are static
+  presentational chrome — an inline `#app-title` overlay in `index.html` (like
+  `#boot-loader`, so it's in the page from the first paint and testable in the
+  raw server bytes) styled in `src/style.css` to mirror the boot loader's
+  phosphor-green `.boot-title` (uppercase name in `--accent` with a green glow,
+  dimmer `--accent-dim` credit line, monospace). `pointer-events: none` keeps the
+  overlay from ever intercepting orbit drags on the canvas underneath, and
+  `z-index: 5` (below the loader's 10) means the loader still fully covers it
+  during boot. **No JS** — `src/main.js`, the render loop, OrbitControls, the
+  geometry/shader, and the M4 decoupling machinery are byte-unchanged. Smoke test
+  asserts both strings ship in the raw HTML AND the live title is visible,
+  horizontally centered near the top, and does not capture pointer events over
+  the canvas (`elementFromPoint` at its center returns the canvas). Proven
+  non-tautological (RED on the prior HTML: no `#app-title`). Verified visually on
+  a real build (centered green title + credit above the orbiting cloud, ~21fps).
+  Pre-change HEAD (rollback) `d5546e8`.
 
 **Carry-over facts from M3/M4 (do not re-derive):**
 
