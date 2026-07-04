@@ -643,3 +643,68 @@ test('milestone 4: camera-permission failure shows an error state and recovers',
   await expect(page.locator('#photo-input')).toBeEnabled();
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
+
+// Milestone 6: WASM inference moves into a Web Worker so the main thread stays
+// responsive during a pass. The worker itself can't run in CI (it loads the
+// real ~100MB model — the worker-path proof is a local real-model probe, like
+// M3's Z-sign), so the testable main-thread seam is the input contract that
+// feeds the worker bridge: BOTH call sites must hand the estimator a CANVAS.
+// A canvas converts to ImageData for postMessage; the blob-URL string the
+// photo path passed before M6 does not cross the worker boundary usefully.
+// The webcam path already passes a canvas (M4-A pins it); this pins the photo
+// path. Fails on the pre-M6 code, which hands the estimator a string URL.
+test('milestone 6: photo path feeds the estimator a canvas (worker-bridgeable input)', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+
+  // Fake estimator that records what input type it was handed.
+  await page.evaluate(() => {
+    const s = (window.__t6 = { input: null });
+    window.__app.__setEstimator((input) => {
+      s.input = {
+        isCanvas: input instanceof HTMLCanvasElement,
+        type: typeof input,
+        width: input && input.width,
+        height: input && input.height,
+      };
+      return Promise.resolve({
+        depth: { data: new Uint8Array(16), width: 4, height: 4 },
+      });
+    });
+  });
+
+  // A real 3×2 PNG, generated in the page so no hand-rolled magic bytes.
+  const pngB64 = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 3;
+    c.height = 2;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#f00';
+    ctx.fillRect(0, 0, 3, 2);
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  await page.setInputFiles('#photo-input', {
+    name: 'tiny.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(pngB64, 'base64'),
+  });
+
+  await expect(page.locator('#status')).toContainText(/done/i);
+  const rec = await page.evaluate(() => window.__t6.input);
+  expect(rec, 'estimator was never called').not.toBeNull();
+  expect(
+    rec.isCanvas,
+    `photo path must hand the estimator a canvas, got ${rec.type} (${rec.width}×${rec.height})`,
+  ).toBe(true);
+  // Drawn from the decoded photo bitmap at its native size.
+  expect(rec.width).toBe(3);
+  expect(rec.height).toBe(2);
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});

@@ -261,12 +261,20 @@ photoInput.addEventListener('change', async () => {
     const estimator = await getDepthEstimator();
     hud.noteDevice(getSelectedDevice());
     statusEl.textContent = 'Estimating depth…';
-    const url = URL.createObjectURL(file);
+    // M6: hand the estimator a canvas, not a blob URL — the one input type
+    // valid on BOTH estimator paths (the direct pipeline reads canvases, and
+    // the WASM worker bridge needs pixels it can post across the boundary; a
+    // blob URL's reachability inside a worker is exactly the kind of
+    // unverified assumption this repo forbids). Drawn at the photo's native
+    // size, so depth resolution matches the pre-M6 URL path.
+    const source = document.createElement('canvas');
+    source.width = image.width;
+    source.height = image.height;
+    source.getContext('2d', { willReadFrequently: true }).drawImage(image, 0, 0);
     try {
-      const { depth } = await hud.timeEstimator(estimator)(url);
+      const { depth } = await hud.timeEstimator(estimator)(source);
       applyDepthToCloud(depth, image);
     } finally {
-      URL.revokeObjectURL(url);
       image.close();
     }
     statusEl.textContent = `Done — ${GRID}×${GRID} points from ${file.name}`;

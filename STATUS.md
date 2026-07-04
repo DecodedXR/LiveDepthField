@@ -4,8 +4,8 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-03 — Milestone 6 (Web Worker WASM inference) queued;
-the human approved the M4-findings candidate on 2026-07-03._
+_Last updated: 2026-07-03 — Milestone 6 (Web Worker WASM inference) done;
+queue empty pending an M7 proposal._
 
 ---
 
@@ -128,6 +128,33 @@ the human approved the M4-findings candidate on 2026-07-03._
   non-tautological (RED with production `src/` reverted, tests kept).
   Pre-change HEAD (rollback) `0c7a26d`.
 
+- **Milestone 6 — Web Worker WASM inference.** On the WASM fallback the depth
+  pipeline now runs in a dedicated **module Web Worker** (`src/depth-worker.js`),
+  so the main thread keeps rendering during a pass; the **WebGPU path is
+  byte-identical** (it already computes off-thread). The split-by-device design
+  also makes the `webInitChain` poison structurally impossible: the worker only
+  ever inits `wasm`, the main thread only ever inits `webgpu`. Facts verified
+  from the installed 4.2.0 source before coding: `env.js` classifies
+  `DedicatedWorkerGlobalScope` as a supported web env (`IS_WEBWORKER_ENV`), and
+  root-exported `RawImage(data, width, height, channels)` is a plain
+  field-assignment constructor — so the bridge posts ImageData pixels
+  (buffer transferred) and the worker wraps them in a `RawImage`; the depth
+  comes back as a plain `{ data, width, height }` (cloned, ~200KB — we don't
+  own the library buffer's lifetime), exactly the subset `applyDepthToCloud`
+  consumes. Both call sites now hand the estimator a **canvas** (the photo
+  handler draws its ImageBitmap to one at native size instead of passing a
+  blob URL, whose in-worker reachability is unverified). `hud.timeEstimator`
+  wraps the bridge proxy, so the M5 readout measures the true round trip;
+  the fake-estimator seam (`__setEstimator`) stays main-thread and never
+  touches the worker — all M3–M5 tests unchanged. Worker init failure rejects
+  the load and clears the estimator cache (retry spawns a fresh worker);
+  a mid-session worker crash rejects in-flight passes (the M4 gen-token catch
+  tears down) and clears the cache too. Smoke test M6-A pins the photo-path
+  canvas input contract (RED pre-M6: it got a blob-URL string). Real-model
+  probe (headless → WASM → worker): a 38.2s pass rendered **558 rAF frames,
+  max gap 1.57s** — pre-M6 the gap was the whole pass. Pre-change HEAD
+  (rollback) `c61d33b`.
+
 **Carry-over facts from M3/M4 (do not re-derive):**
 
 - Depth output contract: `depth` RawImage, Uint8, 1 channel, input W×H, 0–255
@@ -143,26 +170,8 @@ the human approved the M4-findings candidate on 2026-07-03._
 
 ## NEXT (the one actionable task)
 
-- **Milestone 6 — Web Worker WASM inference.** Move depth inference off the
-  main thread into a module Web Worker so machines on the WASM fallback keep
-  the 30fps orbit **during** a pass (today the main thread blocks ~4–11s per
-  WASM pass — M4 finding; WebGPU already computes off-thread and must keep
-  working, worker or not). Human approved this candidate 2026-07-03.
-  Constraints carried from M3–M5:
-  - **Verify before coding, never guess** (CLAUDE.md rule): confirm from the
-    installed transformers.js 4.2.0 source that the pipeline runs in a worker
-    and what input types survive `postMessage` (an `HTMLCanvasElement` does
-    NOT cross the boundary — expect `ImageBitmap`/`ImageData`/raw buffer +
-    `RawImage` on the worker side). If the installed source + a local runtime
-    probe can't settle it, that's a human checkpoint — bail, don't guess.
-  - Keep the probe-once device pick (the `webInitChain` poison quirk lives in
-    the worker now), the drop-never-queue post/consume contract, the M4
-    generation-token teardown semantics, and the M5 inference-time readout
-    (timing must now measure the round trip the user actually experiences).
-  - `window.__app.__setEstimator` and the M4/M5 smoke tests must keep working —
-    the fake-estimator seam should stay on the main thread side of the bridge.
-  - ⚠️ **Effort gate (skill §1–2): this is an inference-decoupling-core task —
-    implement only in a session at known-high effort (`/effort high`).**
+(Nothing queued — propose an M7 candidate with the human before the next
+autopilot run.)
 
 ---
 
