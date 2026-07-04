@@ -21,6 +21,37 @@ canvas {
   display: block;
 }
 
+/* Persistent title + author credit, docked top-middle over the canvas. Mirrors
+   the boot loader's phosphor-green .boot-title so the name carries over from the
+   loading screen. pointer-events:none so the overlay never steals orbit drags
+   from the canvas underneath; z-index sits below #boot-loader (10) so the loader
+   still fully covers it during boot. */
+#app-title {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+#app-title .app-title-name {
+  font: 600 15px/1 var(--mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  text-shadow: 0 0 12px rgba(0, 255, 156, 0.6);
+}
+
+#app-title .app-title-credit {
+  margin-top: 5px;
+  font: 11px/1 var(--mono);
+  letter-spacing: 0.08em;
+  color: var(--accent-dim);
+}
+
 /* Milestone 2: live splat-uniform sliders, docked top-left over the canvas. */
 #controls {
   position: fixed;

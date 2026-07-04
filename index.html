@@ -83,6 +83,17 @@
       <div class="boot-track"><div class="boot-fill"></div></div>
     </div>
     <div id="app"></div>
+    <!--
+      Persistent app title + author credit, top-middle of the screen. Static
+      chrome (inlined here, not built by JS) so it's part of the page from the
+      first paint — sitting behind the #boot-loader overlay (lower z-index)
+      until the app boots and the loader fades. pointer-events:none (see
+      style.css) keeps it from ever intercepting orbit drags over the canvas.
+    -->
+    <div id="app-title">
+      <div class="app-title-name">Live Depth Field</div>
+      <div class="app-title-credit">by Noah Federovitch</div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

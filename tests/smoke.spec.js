@@ -717,6 +717,68 @@ test('aesthetic: pre-upload cloud tint reads green (coding aesthetic)', async ({
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
+// Title + credit (user-directed, not a milestone). The "Live Depth Field" name
+// from the boot loader must ALSO live on the running app — persistently, at the
+// top-middle of the screen — and the project must carry the author credit
+// "by Noah Federovitch". Both are static presentational chrome inlined in the
+// initial HTML (like the boot loader), so this asserts (a) they ship in the raw
+// server bytes AND (b) the name sits horizontally centered near the top of the
+// live page, and (c) the title overlay never intercepts pointer input (so it
+// can't block orbiting the cloud underneath it). Non-tautological: no #app-title
+// exists before this change — every assertion is RED on the prior HTML.
+test('title: Live Depth Field name + Noah Federovitch credit shown at top center', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+
+  // (a) Both strings ship in the exact bytes the server sends — static chrome,
+  // not JS-injected. Fetched raw so a scripted node can't satisfy it.
+  const html = await (await page.request.get('/')).text();
+  expect(html, 'initial HTML must contain an #app-title overlay').toMatch(
+    /id=["']app-title["']/,
+  );
+  expect(html, 'the title must show the app name').toContain('Live Depth Field');
+  expect(html, 'the project must carry the author credit').toContain(
+    'by Noah Federovitch',
+  );
+
+  // (b) Live: the title is visible and its text is present once the page loads.
+  await page.goto('/');
+  const title = page.locator('#app-title');
+  await expect(title).toBeVisible();
+  await expect(title).toContainText('Live Depth Field');
+  await expect(title).toContainText(/by Noah Federovitch/i);
+
+  // Top-middle placement: horizontally centered on the viewport, near the top.
+  const box = await title.boundingBox();
+  const viewport = page.viewportSize();
+  const titleCenter = box.x + box.width / 2;
+  const viewportCenter = viewport.width / 2;
+  expect(
+    Math.abs(titleCenter - viewportCenter),
+    `title must be horizontally centered (center ${titleCenter} vs ${viewportCenter})`,
+  ).toBeLessThan(40);
+  expect(box.y, 'title must sit near the top of the screen').toBeLessThan(80);
+
+  // (c) The overlay sits over the canvas but must not steal orbit input — the
+  // element under its center point must be the canvas, not the title.
+  const underCenter = await page.evaluate(() => {
+    const el = document.getElementById('app-title');
+    const r = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return hit ? hit.tagName.toLowerCase() : null;
+  });
+  expect(underCenter, 'title must not capture pointer events over the canvas').toBe(
+    'canvas',
+  );
+
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
 // Milestone 6: WASM inference moves into a Web Worker so the main thread stays
 // responsive during a pass. The worker itself can't run in CI (it loads the
 // real ~100MB model — the worker-path proof is a local real-model probe, like
