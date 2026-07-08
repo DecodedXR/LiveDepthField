@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { getDepthEstimator, getSelectedDevice, _setEstimatorForTests } from './depth.js';
+import {
+  getDepthEstimator,
+  getSelectedDevice,
+  setProgressHandler,
+  _setEstimatorForTests,
+  _emitProgressForTests,
+} from './depth.js';
 import { initHud } from './hud.js';
 
 // ---------------------------------------------------------------------------
@@ -236,6 +242,16 @@ const statusEl = document.createElement('div');
 statusEl.id = 'status';
 statusEl.textContent = 'Load a photo to see its depth field.';
 controlPanel.appendChild(statusEl);
+
+// M8: live model-download progress. depth.js emits the aggregate 0–100
+// percentage (transformers.js `progress_total`) on both device paths; each
+// call site's next status write ('Estimating depth…' / 'Starting webcam…')
+// naturally ends the readout once the load resolves. Weights are cached
+// after the first load, so later loads emit nothing (or an instant flash
+// from the browser cache).
+setProgressHandler((pct) => {
+  statusEl.textContent = `Downloading depth model… ${Math.round(pct)}%`;
+});
 
 // ===========================================================================
 // MILESTONE 5: polish readouts — FPS, per-pass inference time, and a
@@ -517,6 +533,10 @@ window.__app = {
   // hidden <video> so a test can watch the camera track get released.
   __setEstimator: _setEstimatorForTests,
   __getEstimator: getDepthEstimator,
+  // M8: fake download-progress events for tests (the real download can't
+  // run in CI); routes through the same progress_total filter as the real
+  // callbacks.
+  __emitProgress: _emitProgressForTests,
   webcamRunning: () => webcamActive,
   __webcamVideo: webcamVideo,
   // M5: HUD readouts, so tests can assert the meters against real values.
