@@ -11,6 +11,9 @@
 //
 // Protocol (all messages are plain objects):
 //   main → worker  { type: 'init', model }
+//   worker → main  { type: 'progress', event }   (raw transformers.js
+//                  progress events during the weight download — plain
+//                  clonable objects; the bridge filters for progress_total)
 //   worker → main  { type: 'ready' } | { type: 'init-error', error }
 //   main → worker  { type: 'infer', id, data, width, height }
 //                  — RGBA ImageData pixels; the buffer arrives transferred.
@@ -39,7 +42,10 @@ self.onmessage = async (e) => {
     try {
       const { pipeline, RawImage } = await import('@huggingface/transformers');
       RawImageCtor = RawImage;
-      estimator = await pipeline('depth-estimation', msg.model, { device: 'wasm' });
+      estimator = await pipeline('depth-estimation', msg.model, {
+        device: 'wasm',
+        progress_callback: (event) => self.postMessage({ type: 'progress', event }),
+      });
       self.postMessage({ type: 'ready' });
     } catch (err) {
       self.postMessage({ type: 'init-error', error: errMessage(err) });

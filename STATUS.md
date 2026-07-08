@@ -4,9 +4,8 @@ Single source of truth for "what's next." One milestone per PR/run. Autopilot:
 pick the one task under **NEXT**, ship it, stop. Do **not** start anything under
 **BLOCKED**.
 
-_Last updated: 2026-07-08 — Milestone 7 (mobile-responsive UI) done; M8
-model-download progress is NEXT, then M9 STL+PLY export and M10 expanded
-depth range. (Queue rebuilt from user direction earlier the same day.)_
+_Last updated: 2026-07-08 — Milestone 8 (model-download progress) done; M9
+STL+PLY export is NEXT, then M10 expanded depth range._
 
 ---
 
@@ -257,6 +256,27 @@ depth range. (Queue rebuilt from user direction earlier the same day.)_
   Verified visually on a real build (mobile + desktop screenshots; desktop
   byte-identical). Pre-change HEAD (rollback) `58d3b9a`.
 
+- **Milestone 8 — Model-download progress.** The first photo/webcam model load
+  now shows a live `Downloading depth model… NN%` in `#status`. Event shape
+  confirmed from the installed 4.2.0 source before coding (working rule 1):
+  `pipeline()` wraps any `progress_callback` in `DefaultProgressCallback`
+  (`utils/core.js`), which emits aggregate **`progress_total`** events —
+  `progress` is 0–100 across ALL weight files — alongside the raw per-file
+  `initiate/download/progress/done` events, so no manual aggregation was
+  needed. `src/depth.js` filters for `progress_total` in one place
+  (`emitProgress`) feeding a handler `src/main.js` registers once
+  (`setProgressHandler`); the WebGPU (main-thread) pipeline gets the callback
+  directly, the WASM worker relays its raw events over the bridge as a new
+  `{type:'progress', event}` message (`src/depth-worker.js`). Completion needs
+  no special-casing: each call site's next status write ('Estimating depth…' /
+  'Starting webcam…') ends the readout, and cached loads emit nothing (module
+  cache) or an instant flash (browser cache re-read). Render loop, decoupling
+  machinery, and all estimator call sites byte-unchanged. Test seam
+  `window.__app.__emitProgress` routes fake events through the real filter;
+  smoke test M8 asserts advancing rounded %, per-file events ignored, and
+  return to the normal `Done — …` flow. Proven non-tautological (RED with
+  production `src/` reverted, test kept). Pre-change HEAD (rollback) `c2f0a9f`.
+
 **Carry-over facts from M3/M4 (do not re-derive):**
 
 - Depth output contract: `depth` RawImage, Uint8, 1 channel, input W×H, 0–255
@@ -271,24 +291,6 @@ depth range. (Queue rebuilt from user direction earlier the same day.)_
 ---
 
 ## NEXT (the one actionable task)
-
-- **Milestone 8 — Model-download progress.** The first photo upload / webcam
-  start silently downloads the Depth Anything weights (tens of MB) behind a
-  static status line. Show real progress — a percentage or bar in `#status`.
-  transformers.js takes a `progress_callback` option at pipeline construction;
-  **confirm the exact event shape from the installed 4.2.0 source before
-  coding (working rule 1) — do not assume.** Expect per-file events needing
-  aggregation into one number. M6 wrinkle: on the WASM path the pipeline is
-  built inside `src/depth-worker.js`, so progress events must be relayed over
-  the worker bridge via postMessage; on the WebGPU (main-thread) path they're
-  direct — both call sites feed the same UI. Weights are cached after first
-  load, so the bar should appear only while bytes actually move. Smoke: fake
-  progress events → visible advancing %; completion returns `#status` to the
-  normal flow.
-
----
-
-## BLOCKED — do NOT start until the prior milestone has merged
 
 - **Milestone 9 — Export: "Save as STL" + "Save as PLY" buttons.** (Format
   question resolved with the user 2026-07-08: **both**.) One export module,
@@ -307,6 +309,10 @@ depth range. (Queue rebuilt from user direction earlier the same day.)_
   button, capture the download (Playwright download event), parse the bytes →
   assert header/counts and a few known vertex values; PLY colors match
   `aColor`.
+
+---
+
+## BLOCKED — do NOT start until the prior milestone has merged
 
 - **Milestone 10 — Expanded depth range** (user: "make the potential depth
   more expansive"). Displacement is hard-coded — `z = d/255 − 0.5`, a total

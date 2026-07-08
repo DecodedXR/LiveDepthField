@@ -904,3 +904,59 @@ test('milestone 6: photo path feeds the estimator a canvas (worker-bridgeable in
   expect(rec.height).toBe(2);
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
+
+// M8: model-download progress. transformers.js 4.2.0 emits aggregate
+// `progress_total` events (0–100 across all weight files) when a
+// progress_callback is passed to pipeline() — confirmed from the installed
+// source (utils/core.js DefaultProgressCallback). The app filters for those
+// and shows a live % in #status. Fake events drive the seam
+// (window.__app.__emitProgress); the real model can't download in CI.
+test('milestone 8: model-download progress shows an advancing % and returns to the normal flow', async ({
+  page,
+}) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e}`));
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(`console.error: ${m.text()}`);
+  });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+
+  // Advancing percentage, rounded.
+  await page.evaluate(() =>
+    window.__app.__emitProgress({ status: 'progress_total', progress: 37.4 }),
+  );
+  await expect(page.locator('#status')).toHaveText('Downloading depth model… 37%');
+  await page.evaluate(() =>
+    window.__app.__emitProgress({ status: 'progress_total', progress: 62.9 }),
+  );
+  await expect(page.locator('#status')).toHaveText('Downloading depth model… 63%');
+
+  // Per-file events (status 'progress', 'initiate', 'done', …) must be
+  // ignored — only the aggregate drives the UI.
+  await page.evaluate(() =>
+    window.__app.__emitProgress({ status: 'progress', progress: 99, file: 'model.onnx' }),
+  );
+  await expect(page.locator('#status')).toHaveText('Downloading depth model… 63%');
+
+  // Completion returns #status to the normal flow: a photo pass overwrites it.
+  await page.evaluate(() => {
+    window.__app.__setEstimator(() =>
+      Promise.resolve({ depth: { data: new Uint8Array(16), width: 4, height: 4 } }),
+    );
+  });
+  const pngB64 = await page.evaluate(() => {
+    const c = document.createElement('canvas');
+    c.width = 3;
+    c.height = 2;
+    c.getContext('2d').fillRect(0, 0, 3, 2);
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  await page.setInputFiles('#photo-input', {
+    name: 'tiny.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(pngB64, 'base64'),
+  });
+  await expect(page.locator('#status')).toContainText(/done/i);
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});

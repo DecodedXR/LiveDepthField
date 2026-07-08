@@ -30,6 +30,31 @@ export function getSelectedDevice() {
   return selectedDevice;
 }
 
+// Milestone 8: model-download progress. pipeline() wraps any progress_callback
+// in DefaultProgressCallback (utils/core.js, confirmed from the installed
+// 4.2.0 source), which emits aggregate `progress_total` events — progress is
+// 0–100 across ALL weight files — alongside the raw per-file events. We
+// filter for the aggregate here, in one place for both device paths: the
+// WebGPU (main-thread) pipeline gets emitProgress directly; the WASM worker
+// relays its events over the bridge (see createWorkerEstimator).
+let onProgress = null;
+
+export function setProgressHandler(fn) {
+  onProgress = fn;
+}
+
+function emitProgress(event) {
+  if (event && event.status === 'progress_total' && onProgress) {
+    onProgress(event.progress);
+  }
+}
+
+// Test seam: CI can't download the real model, so tests feed fake events
+// through the same filter the real callbacks use.
+export function _emitProgressForTests(event) {
+  emitProgress(event);
+}
+
 // Returns (and caches) the depth-estimation pipeline. A failed load clears
 // the cache so the next upload can retry (e.g. after a network blip during
 // the weight download).
@@ -77,7 +102,23 @@ async function loadEstimator(resetCache) {
   if (device === 'webgpu') {
     // WebGPU already computes off the main thread — keep the direct path.
     const { pipeline } = await import('@huggingface/transformers');
-    return pipeline('depth-estimation', MODEL, { device });
+    // Stop forwarding progress once the load settles: pipeline() loads its
+    // components via Promise.all, so a rejected component (→ 'Depth failed: …'
+    // in #status) doesn't cancel a sibling download, whose surviving progress
+    // events would otherwise overwrite the error forever (verifier finding).
+    // The worker path is immune — fail() terminates the worker.
+    let settled = false;
+    const p = pipeline('depth-estimation', MODEL, {
+      device,
+      progress_callback: (e) => {
+        if (!settled) emitProgress(e);
+      },
+    });
+    p.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    return p;
   }
   // Milestone 6: on the WASM fallback the ONNX session blocks whatever thread
   // runs it (~4–11s/pass, M4 finding) — run it in a dedicated module worker so
@@ -126,7 +167,9 @@ function createWorkerEstimator(resetCache) {
     });
     worker.addEventListener('message', (e) => {
       const msg = e.data;
-      if (msg.type === 'ready') {
+      if (msg.type === 'progress') {
+        emitProgress(msg.event);
+      } else if (msg.type === 'ready') {
         resolve(estimatorFn);
       } else if (msg.type === 'init-error') {
         fail(new Error(msg.error));
