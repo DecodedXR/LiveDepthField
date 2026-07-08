@@ -110,6 +110,70 @@ test('mobile: boot completes and the fixed chrome is overlap-free, on-screen, an
   expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
 });
 
+// Landscape phones sit inside the same ≤640px breakpoint but are only
+// ~320–360px TALL — and the bottom-docked panel is taller than that, so
+// without a height cap it collides with the top chrome and extends above the
+// viewport, where body{overflow:hidden} makes the clipped rows unreachable
+// (verifier finding: at 640×360 the uncapped panel overlapped #app-title AND
+// #build-credit, and with a grown status line its top edge went negative).
+// Contract here: the panel stays clear of the top chrome and fully inside the
+// viewport, and anything clipped is reachable by scrolling the panel itself.
+test('mobile landscape: panel caps its height below the top chrome and scrolls internally', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await page.setViewportSize({ width: 640, height: 360 });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__app?.getPointCount() === 128 * 128);
+  await expect(page.locator('#boot-loader')).toHaveCount(0);
+
+  // Grow the panel through its real growth path — a long status error line
+  // (mobile drops the desktop max-width, so this wraps to multiple rows).
+  await page.evaluate(() => {
+    document.getElementById('status').textContent =
+      'Webcam failed: NotReadableError: Could not start video source — the ' +
+      'device is already in use by another application.';
+  });
+
+  const viewport = page.viewportSize();
+  const chrome = {};
+  for (const id of ['controls', 'app-title', 'build-credit']) {
+    const el = page.locator(`#${id}`);
+    await expect(el, `#${id} must be visible in landscape`).toBeVisible();
+    chrome[id] = await el.boundingBox();
+  }
+  const ids = Object.keys(chrome);
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      expect(
+        intersects(chrome[ids[i]], chrome[ids[j]]),
+        `#${ids[i]} ${JSON.stringify(chrome[ids[i]])} must not overlap #${
+          ids[j]
+        } ${JSON.stringify(chrome[ids[j]])} in landscape`,
+      ).toBe(false);
+    }
+  }
+  expect(
+    insideViewport(chrome['controls'], viewport),
+    `#controls ${JSON.stringify(chrome['controls'])} must sit fully inside the ${
+      viewport.width
+    }×${viewport.height} viewport`,
+  ).toBe(true);
+
+  // The grown panel cannot fit 44px rows in ~280px of height, so it must be
+  // scrollable — and scrolling must actually move (reach the clipped rows).
+  const scroll = await page.evaluate(() => {
+    const el = document.getElementById('controls');
+    const scrollable = el.scrollHeight > el.clientHeight + 1;
+    el.scrollTop = el.scrollHeight;
+    return { scrollable, moved: el.scrollTop > 0 };
+  });
+  expect(scroll.scrollable, 'clipped panel must overflow internally').toBe(true);
+  expect(scroll.moved, 'panel must scroll to reach clipped controls').toBe(true);
+
+  expect(errors, `unexpected page errors:\n${errors.join('\n')}`).toEqual([]);
+});
+
 // Touch orbit: a one-finger drag on the canvas must rotate the camera.
 // OrbitControls listens to pointer events, but its pointerdown handler calls
 // setPointerCapture(event.pointerId) unguarded (verified in the installed

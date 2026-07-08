@@ -186,6 +186,17 @@ canvas {
     border-bottom: none;
     /* Keep the panel's own bottom padding clear of the iPhone home-bar. */
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    /* Landscape phones are ≤640px wide too but only ~320–360px TALL — the
+       docked panel is taller than that. Cap it below the top chrome band
+       (title + build credit end around y=67) and scroll internally, so it
+       never collides with the title or grows past the viewport top, where
+       body{overflow:hidden} would make clipped rows unreachable. dvh tracks
+       the real visible height under mobile browser toolbars; the vh line is
+       the fallback for engines without it. */
+    max-height: calc(100vh - 88px);
+    max-height: calc(100dvh - 88px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   /* Finger-sized rows; sliders stretch to use the full panel width. */
