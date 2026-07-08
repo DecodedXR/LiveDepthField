@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Live Depth Field</title>
+    <!--
+      Boot loading bar. Inlined here (not in a stylesheet, not built by JS) so it
+      paints on the FIRST paint — the instant the page opens, before the ~194KB
+      app module downloads or runs. src/main.js fades it out on the first
+      rendered frame. The CSS fill advances toward 92% on its own, then main.js
+      snaps it to 100% exactly when the app is actually ready — honest feedback,
+      zero JS to start it.
+    -->
+    <style>
+      #boot-loader {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        background: #000;
+        transition: opacity 0.35s ease;
+      }
+      #boot-loader.boot-done {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #boot-loader .boot-title {
+        font: 600 13px/1 'JetBrains Mono', 'Fira Code', ui-monospace, Menlo,
+          Consolas, monospace;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: #00ff9c;
+        text-shadow: 0 0 12px rgba(0, 255, 156, 0.6);
+      }
+      #boot-loader .boot-track {
+        width: 220px;
+        height: 4px;
+        border-radius: 4px;
+        background: rgba(0, 255, 156, 0.14);
+        overflow: hidden;
+      }
+      #boot-loader .boot-fill {
+        width: 0;
+        height: 100%;
+        border-radius: 4px;
+        background: linear-gradient(90deg, #00b36b, #00ff9c);
+        box-shadow: 0 0 12px rgba(0, 255, 156, 0.75);
+        animation: boot-advance 2.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        transition: width 0.3s ease;
+      }
+      @keyframes boot-advance {
+        from {
+          width: 0;
+        }
+        to {
+          width: 92%;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-loader .boot-fill {
+          animation-duration: 0.01ms;
+        }
+        #boot-loader {
+          transition-duration: 0.01ms;
+        }
+      }
+    </style>
+    <script type="module" crossorigin src="/LiveDepthField/assets/index-e_XaP4M2.js"></script>
+    <link rel="stylesheet" crossorigin href="/LiveDepthField/assets/index-BXgXoQYX.css">
+  </head>
+  <body>
+    <div
+      id="boot-loader"
+      role="progressbar"
+      aria-label="Loading Live Depth Field"
+      aria-live="polite"
+    >
+      <div class="boot-title">Live Depth Field</div>
+      <div class="boot-track"><div class="boot-fill"></div></div>
+    </div>
+    <div id="app"></div>
+    <!--
+      Persistent app title + author credit, top-middle of the screen. Static
+      chrome (inlined here, not built by JS) so it's part of the page from the
+      first paint — sitting behind the #boot-loader overlay (lower z-index)
+      until the app boots and the loader fades. pointer-events:none (see
+      style.css) keeps it from ever intercepting orbit drags over the canvas.
+    -->
+    <div id="app-title">
+      <div class="app-title-name">Live Depth Field</div>
+      <div class="app-title-credit">by Noah Federovitch</div>
+    </div>
+    <!--
+      Build attribution, bottom-middle of the screen — counterpart to #app-title.
+      Static chrome (inlined, not built by JS), pointer-events:none so it never
+      blocks orbit drags over the canvas.
+    -->
+    <div id="build-credit">Built with Claude Fable 5</div>
+  </body>
+</html>
