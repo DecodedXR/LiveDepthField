@@ -7,7 +7,13 @@ Gaussian splats - entirely in the browser. Vanilla JS + Three.js + Vite, with
 on-device depth (Depth Anything V2 Small via transformers.js) added in later
 milestones. No backend, no accounts.
 
-## Run
+## How to use
+
+1. Open **[decodedxr.github.io/LiveDepthField](https://decodedxr.github.io/LiveDepthField/)** (desktop Chrome/Edge works best).
+2. Allow camera access for a live feed, or pick a photo with the file button.
+3. Drag to orbit the point cloud, scroll to zoom.
+
+## Run locally
 
 ```bash
 npm install
